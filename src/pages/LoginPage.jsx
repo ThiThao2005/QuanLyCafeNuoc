@@ -3,6 +3,34 @@ import { supabase } from '../services/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, Coffee } from 'lucide-react';
 
+const parseAdminEmails = () => {
+  const raw = import.meta.env.VITE_ADMIN_EMAILS || '';
+  return raw
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+};
+
+const ADMIN_EMAILS = parseAdminEmails();
+
+const isAdminUser = (user) => {
+  if (!user) return false;
+
+  const roles = [
+    user.app_metadata?.role,
+    user.user_metadata?.role,
+    ...(Array.isArray(user.app_metadata?.roles) ? user.app_metadata.roles : []),
+    ...(Array.isArray(user.user_metadata?.roles) ? user.user_metadata.roles : []),
+  ]
+    .filter(Boolean)
+    .map((role) => String(role).toLowerCase());
+
+  if (roles.includes('admin')) return true;
+
+  const email = String(user.email || '').toLowerCase();
+  return ADMIN_EMAILS.includes(email);
+};
+
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,10 +41,13 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       alert("Tài khoản hoặc mật khẩu không đúng rồi Thảo ơi!");
+    } else if (!isAdminUser(data?.user)) {
+      await supabase.auth.signOut();
+      alert('Tài khoản này không có quyền truy cập trang quản trị.');
     } else {
       navigate('/admin'); // Đăng nhập xong thì vào thẳng Admin
     }

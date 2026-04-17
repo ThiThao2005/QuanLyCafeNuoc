@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../services/supabaseClient';
 import { 
   TrendingUp, 
   Coffee, 
@@ -11,6 +12,11 @@ import {
 
 const AdminSidebar = ({ activeTab, setActiveTab }) => {
   const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate('/login', { replace: true });
+  };
 
   // Danh sách các mục menu để render cho gọn
   const menuItems = [
@@ -72,7 +78,7 @@ const AdminSidebar = ({ activeTab, setActiveTab }) => {
         </button>
 
         <button 
-          onClick={() => navigate('/')}
+          onClick={handleSignOut}
           className="w-full flex items-center gap-4 px-4 py-4 rounded-[20px] bg-red-50 text-red-500 font-bold hover:bg-red-500 hover:text-white transition-all duration-300 shadow-sm shadow-red-50 group"
         >
           <div className="bg-white p-1.5 rounded-lg group-hover:bg-red-400 transition-colors">

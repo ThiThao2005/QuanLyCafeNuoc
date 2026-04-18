@@ -2,33 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, Coffee } from 'lucide-react';
-
-// 1. Logic kiểm tra quyền Admin
-const parseAdminEmails = () => {
-  const raw = import.meta.env.VITE_ADMIN_EMAILS || '';
-  return raw
-    .split(',')
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-};
-
-const ADMIN_EMAILS = parseAdminEmails();
-
-const isAdminUser = (user) => {
-  if (!user) return false;
-  const roles = [
-    user.app_metadata?.role,
-    user.user_metadata?.role,
-    ...(Array.isArray(user.app_metadata?.roles) ? user.app_metadata.roles : []),
-    ...(Array.isArray(user.user_metadata?.roles) ? user.user_metadata.roles : []),
-  ]
-    .filter(Boolean)
-    .map((role) => String(role).toLowerCase());
-
-  if (roles.includes('admin')) return true;
-  const email = String(user.email || '').toLowerCase();
-  return ADMIN_EMAILS.includes(email);
-};
+import { isAdminUser } from '../services/adminAuth';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -43,7 +17,7 @@ const LoginPage = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         if (isAdminUser(session.user)) {
-          navigate('/admin');
+          navigate('/admin', { replace: true });
         } else {
           await supabase.auth.signOut();
           alert('Tài khoản Google này không có quyền truy cập.');
@@ -66,7 +40,7 @@ const LoginPage = () => {
       await supabase.auth.signOut();
       alert('Tài khoản này không có quyền truy cập trang quản trị.');
     } else {
-      navigate('/admin');
+      navigate('/admin', { replace: true });
     }
     setLoading(false);
   };

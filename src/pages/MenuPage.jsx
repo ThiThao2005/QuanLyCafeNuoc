@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, ShoppingCart, Star, Flame } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import { isAdminUser } from '../services/adminAuth';
 import ProductDrawer from '../components/ProductDrawer';
 import { useCart } from '../CartContext.jsx';
 
@@ -28,6 +29,17 @@ const MenuPage = () => {
     { id: 4, name: 'Đá xay', icon: '❄️' },
     { id: 5, name: 'Bánh ngọt', icon: '🍰' },
   ];
+
+  useEffect(() => {
+    const redirectAdminToDashboard = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (isAdminUser(session?.user)) {
+        navigate('/admin', { replace: true });
+      }
+    };
+
+    redirectAdminToDashboard();
+  }, [navigate]);
 
   useEffect(() => {
     const fetchProducts = async () => {

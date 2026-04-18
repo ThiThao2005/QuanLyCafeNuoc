@@ -1,34 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-
-const parseAdminEmails = () => {
-  const raw = import.meta.env.VITE_ADMIN_EMAILS || '';
-  return raw
-    .split(',')
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-};
-
-const ADMIN_EMAILS = parseAdminEmails();
-
-const isAdminUser = (user) => {
-  if (!user) return false;
-
-  const roles = [
-    user.app_metadata?.role,
-    user.user_metadata?.role,
-    ...(Array.isArray(user.app_metadata?.roles) ? user.app_metadata.roles : []),
-    ...(Array.isArray(user.user_metadata?.roles) ? user.user_metadata.roles : []),
-  ]
-    .filter(Boolean)
-    .map((role) => String(role).toLowerCase());
-
-  if (roles.includes('admin')) return true;
-
-  const email = String(user.email || '').toLowerCase();
-  return ADMIN_EMAILS.includes(email);
-};
+import { isAdminUser } from '../services/adminAuth';
 
 const ProtectedRoute = ({ children }) => {
   const [session, setSession] = useState(null);
@@ -58,8 +31,8 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (!isAdmin) {
-    return <Navigate to="/menu" replace />;
+if (!isAdmin) {
+    return <Navigate to="/login" replace />;
   }
 
   return children;

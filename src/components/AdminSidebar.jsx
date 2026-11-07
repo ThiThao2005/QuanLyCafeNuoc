@@ -1,104 +1,129 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-import { 
-  TrendingUp, 
-  Coffee, 
-  Users, 
-  LogOut, 
-  ChevronLeft,
-  LayoutDashboard
-} from 'lucide-react';
+import { BarChart3, ReceiptText, Coffee, LayoutGrid, LogOut, Store, ChefHat } from 'lucide-react';
+
+export const ADMIN_TABS = [
+  { id: 'stats', label: 'Tổng quan', icon: BarChart3 },
+  { id: 'orders', label: 'Đơn hàng', icon: ReceiptText },
+  { id: 'menu', label: 'Thực đơn', icon: Coffee },
+  { id: 'tables', label: 'Bàn & QR', icon: LayoutGrid },
+];
+
+const useCurrentEmail = () => {
+  const [email, setEmail] = useState('');
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ''));
+  }, []);
+  return email;
+};
 
 const AdminSidebar = ({ activeTab, setActiveTab }) => {
   const navigate = useNavigate();
+  const email = useCurrentEmail();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate('/login', { replace: true });
   };
 
-  // Danh sách các mục menu để render cho gọn
-  const menuItems = [
-    { id: 'stats', label: 'Thống kê', icon: <TrendingUp className="w-5 h-5" /> },
-    { id: 'menu', label: 'Thực đơn', icon: <Coffee className="w-5 h-5" /> },
-    { id: 'tables', label: 'Quản lý bàn', icon: <Users className="w-5 h-5" /> },
-  ];
-
   return (
-    <div className="w-72 bg-white h-screen sticky top-0 border-r border-gray-100 flex flex-col p-6 shadow-sm">
-      {/* 1. Logo & Brand */}
-      <div className="flex items-center gap-3 px-2 mb-10">
-        <div className="bg-orange-500 p-2.5 rounded-2xl shadow-lg shadow-orange-200">
-          <LayoutDashboard className="text-white w-6 h-6" />
+    <>
+      {/* Máy tính: thanh bên trái */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-blush-100 bg-white p-5 md:flex">
+        <div className="mb-8 flex items-center gap-3 px-2">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blush-500 shadow-soft">
+            <Coffee className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <p className="font-extrabold leading-none text-cocoa-900">Hoa Mai <span className="text-blush-600">Coffee</span></p>
+            <p className="mt-1 text-[11px] font-semibold text-cocoa-400">Trang quản lý</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-black text-gray-800 tracking-tighter uppercase italic leading-none">
-            HUTECH
-          </h1>
-          <p className="text-[10px] font-bold text-orange-500 uppercase tracking-[0.2em] mt-1">
-            Admin Panel
-          </p>
-        </div>
-      </div>
 
-      {/* 2. Navigation Links */}
-      <div className="flex-1 space-y-2">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mb-4">Main Menu</p>
-        
-        {menuItems.map((item) => (
+        <nav className="flex-1 space-y-1">
+          {ADMIN_TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                activeTab === id ? 'bg-blush-500 text-white shadow-soft' : 'text-cocoa-500 hover:bg-blush-50 hover:text-blush-700'
+              }`}
+            >
+              <Icon className="h-5 w-5" />
+              {label}
+            </button>
+          ))}
+
+          <div className="!mt-6 border-t border-blush-100 pt-4">
+            <p className="mb-2 px-4 text-[11px] font-bold uppercase tracking-wider text-cocoa-300">Mở nhanh</p>
+            <button
+              onClick={() => navigate('/barista')}
+              className="flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-semibold text-cocoa-500 hover:bg-blush-50 hover:text-blush-700"
+            >
+              <ChefHat className="h-5 w-5" /> Màn hình pha chế
+            </button>
+            <button
+              onClick={() => navigate('/menu')}
+              className="flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-semibold text-cocoa-500 hover:bg-blush-50 hover:text-blush-700"
+            >
+              <Store className="h-5 w-5" /> Xem trang khách
+            </button>
+          </div>
+        </nav>
+
+        <div className="mt-4 rounded-2xl bg-blush-50 p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blush-200 text-sm font-bold uppercase text-blush-800">
+              {email ? email[0] : 'A'}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-bold text-cocoa-900">{email || 'Quản trị viên'}</p>
+              <p className="text-[11px] text-cocoa-400">Quản trị viên</p>
+            </div>
+          </div>
           <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={`w-full flex items-center gap-4 px-4 py-4 rounded-[20px] font-bold transition-all duration-300 group
-              ${activeTab === item.id 
-                ? 'bg-orange-500 text-white shadow-xl shadow-orange-100 translate-x-1' 
-                : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
+            onClick={handleSignOut}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white py-2 text-xs font-bold text-blush-700 transition hover:bg-blush-500 hover:text-white"
           >
-            <span className={`transition-transform duration-300 ${activeTab === item.id ? 'scale-110' : 'group-hover:scale-110'}`}>
-              {item.icon}
-            </span>
-            <span className="text-sm tracking-tight">{item.label}</span>
-            
-            {activeTab === item.id && (
-              <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full shadow-sm"></div>
-            )}
+            <LogOut className="h-4 w-4" /> Đăng xuất
+          </button>
+        </div>
+      </aside>
+
+      {/* Điện thoại: thanh trên + thanh tab dưới */}
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-blush-100 bg-white/90 px-4 py-3 backdrop-blur md:hidden">
+        <div className="flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blush-500">
+            <Coffee className="h-4 w-4 text-white" />
+          </div>
+          <p className="font-extrabold text-cocoa-900">Quản lý</p>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={() => navigate('/barista')} className="rounded-full p-2 text-cocoa-500" aria-label="Màn hình pha chế">
+            <ChefHat className="h-5 w-5" />
+          </button>
+          <button onClick={handleSignOut} className="rounded-full p-2 text-cocoa-500" aria-label="Đăng xuất">
+            <LogOut className="h-5 w-5" />
+          </button>
+        </div>
+      </header>
+
+      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-4 border-t border-blush-100 bg-white pb-safe pt-1 md:hidden">
+        {ADMIN_TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-semibold ${
+              activeTab === id ? 'text-blush-600' : 'text-cocoa-400'
+            }`}
+          >
+            <Icon className="h-5 w-5" />
+            {label}
           </button>
         ))}
-      </div>
-
-      {/* 3. Footer Actions */}
-      <div className="pt-6 border-t border-gray-50 space-y-3">
-        <button 
-          onClick={() => navigate('/menu')}
-          className="w-full flex items-center gap-4 px-4 py-3 rounded-[20px] text-gray-400 font-bold hover:bg-gray-50 hover:text-orange-500 transition-all text-sm"
-        >
-          <ChevronLeft className="w-5 h-5" />
-          Về trang bán hàng
-        </button>
-
-        <button 
-          onClick={handleSignOut}
-          className="w-full flex items-center gap-4 px-4 py-4 rounded-[20px] bg-red-50 text-red-500 font-bold hover:bg-red-500 hover:text-white transition-all duration-300 shadow-sm shadow-red-50 group"
-        >
-          <div className="bg-white p-1.5 rounded-lg group-hover:bg-red-400 transition-colors">
-            <LogOut className="w-4 h-4" />
-          </div>
-          <span className="text-sm">Đăng xuất</span>
-        </button>
-      </div>
-
-      {/* Profile tóm tắt (Optionally) */}
-      <div className="mt-8 px-2 flex items-center gap-3 border-t border-gray-50 pt-6">
-        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center font-black text-orange-600 border-2 border-white shadow-sm text-xs">
-          TH
-        </div>
-        <div>
-          <p className="text-xs font-black text-gray-800">Thảo Nguyễn</p>
-          <p className="text-[10px] text-gray-400 font-medium">Administrator</p>
-        </div>
-      </div>
-    </div>
+      </nav>
+    </>
   );
 };
 

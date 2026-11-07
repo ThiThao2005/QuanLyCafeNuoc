@@ -1,45 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, ShoppingCart, Star, Flame } from 'lucide-react';
+import { Search, Plus, ShoppingBag, ChevronRight, X, Flame, MapPin } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
-import { isAdminUser } from '../services/adminAuth';
+import { useTableNumber } from '../services/tableSession';
 import ProductDrawer from '../components/ProductDrawer';
 import { useCart } from '../CartContext.jsx';
+import { CATEGORIES, FALLBACK_IMAGE, formatCurrency, isBestseller } from '../menuConfig';
 
-const formatCurrency = (value) => new Intl.NumberFormat('vi-VN').format(value);
+const greeting = () => {
+  const h = new Date().getHours();
+  if (h < 11) return 'Chào buổi sáng ☀️';
+  if (h < 14) return 'Chào buổi trưa 🌤️';
+  if (h < 18) return 'Chào buổi chiều 🌸';
+  return 'Chào buổi tối 🌙';
+};
+
+const BANNER_STYLES = [
+  'from-blush-200 via-blush-100 to-white',
+  'from-[#FFE1D6] via-[#FFF0EA] to-white',
+  'from-[#F3E1F5] via-[#FAF0FB] to-white',
+];
+
+const ProductImage = ({ src, alt, className }) => (
+  <img
+    src={src || FALLBACK_IMAGE}
+    alt={alt}
+    loading="lazy"
+    onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE; }}
+    className={className}
+  />
+);
 
 const MenuPage = () => {
   const navigate = useNavigate();
   const { addToCart, cartCount, cartTotal } = useCart();
-  
+  const tableNumber = useTableNumber();
+
   const [products, setProducts] = useState([]);
-  const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(0);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const bannerRef = useRef(null);
 
-  const categories = [
-    { id: 0, name: 'Tất cả', icon: '🌟' },
-    { id: 1, name: 'Cà phê', icon: '☕' },
-    { id: 2, name: 'Trà trái cây', icon: '🍹' },
-    { id: 3, name: 'Trà sữa', icon: '🧋' },
-    { id: 4, name: 'Đá xay', icon: '❄️' },
-    { id: 5, name: 'Bánh ngọt', icon: '🍰' },
-  ];
-
-  useEffect(() => {
-    const redirectAdminToDashboard = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (isAdminUser(session?.user)) {
-        navigate('/admin', { replace: true });
-      }
-    };
-
-    redirectAdminToDashboard();
-  }, [navigate]);
+  const handleAddToCart = (item) => {
+    addToCart(item);
+  };
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -47,190 +54,333 @@ const MenuPage = () => {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('is_available', true);
+        .eq('is_available', true)
+        .order('category_id')
+        .order('id');
 
-      if (error) {
-        setErrorMessage('Không thể tải menu. Kiểm tra lại kết nối nha Thảo!');
-      } else {
-        setProducts(data);
-        setFilteredProducts(data);
-      }
+      if (error) setErrorMessage('Không tải được menu. Bạn kiểm tra kết nối mạng rồi thử lại nhé.');
+      else setProducts(data || []);
       setLoading(false);
     };
     fetchProducts();
   }, []);
 
+  const bestsellers = useMemo(() => {
+    const list = products.filter(isBestseller);
+    return list.length ? list : products.slice(0, 6);
+  }, [products]);
+
+  const banners = bestsellers.slice(0, 3);
+
+  const sections = useMemo(
+    () => CATEGORIES
+      .map((cat) => ({ ...cat, items: products.filter((p) => p.category_id === cat.id) }))
+      .filter((cat) => cat.items.length > 0),
+    [products],
+  );
+
+  const searchResults = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return null;
+    return products.filter((p) =>
+      p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
+  }, [products, searchTerm]);
+
+  // Banner tự chuyển sau mỗi 4 giây
   useEffect(() => {
-    let result = products;
-    if (activeTab !== 0) result = result.filter(p => p.category_id === activeTab);
-    if (searchTerm) result = result.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    setFilteredProducts(result);
-  }, [activeTab, searchTerm, products]);
+    if (banners.length < 2) return undefined;
+    const timer = setInterval(() => {
+      const el = bannerRef.current;
+      if (!el) return;
+      const next = (Math.round(el.scrollLeft / el.clientWidth) + 1) % banners.length;
+      el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' });
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [banners.length]);
+
+  const onBannerScroll = (e) => {
+    const el = e.currentTarget;
+    setBannerIndex(Math.round(el.scrollLeft / el.clientWidth));
+  };
+
+  const scrollToCategory = (id) => {
+    document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const openProduct = (product) => setSelectedProduct(product);
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-white">
-        <div className="relative w-20 h-20">
-          <div className="absolute inset-0 border-4 border-orange-100 rounded-full"></div>
-          <div className="absolute inset-0 border-4 border-orange-500 rounded-full border-t-transparent animate-spin"></div>
+      <div className="mx-auto min-h-screen max-w-md space-y-5 bg-blush-50 p-5">
+        <div className="h-12 w-2/3 animate-pulse rounded-2xl bg-blush-100" />
+        <div className="h-12 animate-pulse rounded-full bg-white" />
+        <div className="h-40 animate-pulse rounded-[28px] bg-blush-100" />
+        <div className="grid grid-cols-5 gap-3">
+          {[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-2xl bg-white" />)}
         </div>
-        <p className="mt-6 text-gray-400 font-bold tracking-widest animate-pulse">HUTECH COFFEE IS BREWING...</p>
+        {[...Array(3)].map((_, i) => <div key={i} className="h-28 animate-pulse rounded-3xl bg-white" />)}
       </div>
     );
   }
 
   return (
-    <div className="bg-[#FBFCFE] min-h-screen pb-32 font-sans text-slate-800">
-      {/* 1. PREMIUM HEADER */}
-      <div className="bg-white/80 backdrop-blur-xl sticky top-0 z-30 px-6 py-4 border-b border-gray-100/50">
-        <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full uppercase tracking-tighter">Premium Cafe</span>
+    <div className="min-h-screen bg-blush-50">
+      <div className="mx-auto max-w-md pb-32">
+        {/* 1. HEADER */}
+        <header className="sticky top-0 z-30 bg-blush-50/90 px-5 pb-3 pt-4 backdrop-blur-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-cocoa-400">{greeting()}</p>
+              <h1 className="text-xl font-extrabold tracking-tight text-cocoa-900">
+                Hoa Mai <span className="text-blush-600">Coffee</span>
+              </h1>
             </div>
-            <h1 className="text-2xl font-black text-slate-900 mt-1 flex items-center gap-2">
-              HUTECH COFFEE <span className="text-xl">☕</span>
-            </h1>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex gap-0.5">
-                {[...Array(5)].map((_, i) => <Star key={i} className="w-3 h-3 fill-yellow-400 text-yellow-400" />)}
-              </div>
-              <span className="text-[11px] font-bold text-slate-400">| Bàn số 05</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/')}
+                className="flex items-center gap-1 rounded-full bg-white px-3 py-2 text-xs font-bold text-blush-700 shadow-card"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                {tableNumber ? `Bàn ${tableNumber}` : 'Chọn bàn'}
+              </button>
+              <button
+                onClick={() => navigate('/checkout')}
+                className="relative rounded-full bg-white p-2.5 shadow-card active:scale-95"
+                aria-label="Giỏ hàng"
+              >
+                <ShoppingBag className="h-5 w-5 text-cocoa-700" />
+                {cartCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-blush-500 px-1 text-[10px] font-bold text-white ring-2 ring-blush-50">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
-          <div className="relative group active:scale-90 transition-transform cursor-pointer" onClick={() => navigate('/checkout')}>
-            <div className="bg-slate-900 p-3 rounded-[20px] shadow-xl shadow-slate-200">
-              <ShoppingCart className="text-white w-6 h-6" />
-            </div>
-            {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] w-6 h-6 rounded-full flex items-center justify-center font-black border-4 border-white animate-bounce-subtle">
-                {cartCount}
-              </span>
+
+          <div className="relative mt-3">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cocoa-300" />
+            <input
+              type="text"
+              placeholder="Hôm nay bạn muốn uống gì?"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-full border-0 bg-white py-3 pl-11 pr-10 text-sm font-medium text-cocoa-900 shadow-card placeholder:text-cocoa-300 focus:ring-2 focus:ring-blush-300"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-blush-100 p-1"
+                aria-label="Xóa tìm kiếm"
+              >
+                <X className="h-3.5 w-3.5 text-blush-700" />
+              </button>
             )}
           </div>
-        </div>
+        </header>
 
-        {/* MODERN SEARCH BAR */}
-        <div className="relative mt-6">
-          <input 
-            type="text" 
-            placeholder="Bạn muốn uống gì hôm nay?..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-100/50 border-2 border-transparent focus:border-orange-500/20 focus:bg-white rounded-[22px] py-4 pl-12 pr-4 text-sm font-medium transition-all shadow-inner"
-          />
-          <Search className="absolute left-4 top-4 text-slate-400 w-5 h-5" />
-        </div>
-      </div>
-
-      {/* 2. TRENDING CATEGORIES */}
-      <div className="px-6 mt-8 overflow-x-auto flex space-x-5 no-scrollbar pb-2">
-        {categories.map((cat) => (
-          <button 
-            key={cat.id}
-            onClick={() => setActiveTab(cat.id)}
-            className="flex flex-col items-center group"
-          >
-            <div className={`w-16 h-16 rounded-[24px] flex items-center justify-center text-2xl transition-all duration-500 ${activeTab === cat.id ? 'bg-orange-500 text-white rotate-6 shadow-xl shadow-orange-200' : 'bg-white text-slate-400 shadow-sm border border-slate-100 group-hover:border-orange-200'}`}>
-              {cat.icon}
-            </div>
-            <span className={`text-[11px] font-black mt-3 uppercase tracking-tighter transition-colors ${activeTab === cat.id ? 'text-orange-600' : 'text-slate-400'}`}>
-              {cat.name}
-            </span>
-            {activeTab === cat.id && <div className="w-1 h-1 bg-orange-500 rounded-full mt-1"></div>}
-          </button>
-        ))}
-      </div>
-
-      {/* 3. PRODUCT GRID WITH GLASS CARDS */}
-      <div className="px-6 mt-8 grid grid-cols-2 gap-6">
         {errorMessage && (
-          <div className="col-span-2 bg-red-50 p-4 rounded-3xl text-red-600 text-xs font-bold text-center border border-red-100">
+          <div className="mx-5 mt-2 rounded-2xl bg-white p-4 text-center text-sm font-semibold text-blush-700 shadow-card">
             {errorMessage}
           </div>
         )}
-        
-        {filteredProducts.length > 0 ? (
-          filteredProducts.map((item) => (
-            <div 
-              key={item.id} 
-              onClick={() => { setSelectedProduct(item); setIsDrawerOpen(true); }}
-              className="group bg-white rounded-[38px] p-3 shadow-[0_10px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(249,115,22,0.1)] transition-all duration-500 border border-transparent hover:border-orange-100 relative cursor-pointer active:scale-95"
-            >
-              <div className="relative h-44 w-full rounded-[30px] overflow-hidden">
-                <img src={item.image_url} alt={item.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 p-2" />
-                <div className="absolute top-3 left-3 bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full flex items-center gap-1">
-                  <Flame className="w-3 h-3 text-orange-400" />
-                  <span className="text-[9px] font-black text-white uppercase tracking-tighter">Bestseller</span>
-                </div>
+
+        {searchResults ? (
+          /* KẾT QUẢ TÌM KIẾM */
+          <section className="px-5 pt-3">
+            <p className="mb-3 text-sm font-semibold text-cocoa-500">
+              {searchResults.length} món phù hợp với “{searchTerm.trim()}”
+            </p>
+            {searchResults.length ? (
+              <div className="space-y-3">
+                {searchResults.map((item) => (
+                  <MenuRow key={item.id} item={item} onOpen={openProduct} />
+                ))}
               </div>
-              
-              <div className="px-2 pt-4 pb-2">
-                <h3 className="font-black text-slate-800 text-sm leading-tight line-clamp-1">{item.name}</h3>
-                <div className="flex justify-between items-end mt-2">
-                  <p className="text-orange-500 font-black text-lg">
-                    {formatCurrency(item.price)}đ
-                  </p>
-                  <div className="bg-orange-500 text-white p-2 rounded-2xl shadow-lg shadow-orange-100 group-hover:rotate-12 transition-transform">
-                    <Plus className="w-4 h-4" />
-                  </div>
-                </div>
+            ) : (
+              <div className="py-16 text-center">
+                <div className="text-5xl">🔍</div>
+                <p className="mt-3 font-semibold text-cocoa-500">Chưa có món này, bạn thử tên khác nhé!</p>
               </div>
-            </div>
-          ))
+            )}
+          </section>
         ) : (
-          <div className="col-span-2 py-20 text-center space-y-4">
-            <div className="text-5xl">🔍</div>
-            <p className="text-slate-400 font-bold italic tracking-tight">Hết món này rồi Thảo ơi, thử món khác nha! ✨</p>
-          </div>
+          <>
+            {/* 2. BANNER MÓN NỔI BẬT */}
+            {banners.length > 0 && (
+              <section className="mt-2 px-5">
+                <div
+                  ref={bannerRef}
+                  onScroll={onBannerScroll}
+                  className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto rounded-[28px]"
+                >
+                  {banners.map((item, i) => (
+                    <button
+                      key={item.id}
+                      onClick={() => openProduct(item)}
+                      className={`relative flex h-44 w-full shrink-0 snap-center items-center overflow-hidden bg-gradient-to-br ${BANNER_STYLES[i % BANNER_STYLES.length]} p-5 text-left`}
+                    >
+                      <div className="relative z-10 w-[55%]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blush-700">
+                          <Flame className="h-3 w-3" /> Được yêu thích
+                        </span>
+                        <h3 className="mt-2 text-lg font-extrabold leading-tight text-cocoa-900">{item.name}</h3>
+                        <p className="mt-1 text-sm font-bold text-blush-600">{formatCurrency(item.price)}</p>
+                        <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-blush-500 px-3 py-1.5 text-xs font-bold text-white">
+                          Đặt ngay <ChevronRight className="h-3.5 w-3.5" />
+                        </span>
+                      </div>
+                      <div className="absolute -right-6 top-1/2 h-44 w-44 -translate-y-1/2 overflow-hidden rounded-full border-[6px] border-white/70 shadow-soft">
+                        <ProductImage src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {banners.length > 1 && (
+                  <div className="mt-2 flex justify-center gap-1.5">
+                    {banners.map((b, i) => (
+                      <span
+                        key={b.id}
+                        className={`h-1.5 rounded-full transition-all ${i === bannerIndex ? 'w-5 bg-blush-500' : 'w-1.5 bg-blush-200'}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* 3. DANH MỤC */}
+            <section className="mt-5 px-5">
+              <div className="grid grid-cols-5 gap-2">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => scrollToCategory(cat.id)}
+                    className="flex flex-col items-center gap-1.5 active:scale-95"
+                  >
+                    <span className={`flex h-14 w-14 items-center justify-center rounded-2xl ${cat.tint} text-2xl shadow-card`}>
+                      {cat.emoji}
+                    </span>
+                    <span className="text-center text-[11px] font-semibold leading-tight text-cocoa-700">{cat.name}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {/* 4. MÓN BÁN CHẠY */}
+            {bestsellers.length > 0 && (
+              <section className="mt-7">
+                <div className="mb-3 flex items-center justify-between px-5">
+                  <h2 className="text-lg font-extrabold text-cocoa-900">Món bán chạy 🔥</h2>
+                </div>
+                <div className="no-scrollbar flex gap-3 overflow-x-auto px-5 pb-2">
+                  {bestsellers.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => openProduct(item)}
+                      className="w-36 shrink-0 rounded-3xl bg-white p-2 text-left shadow-card active:scale-[0.98]"
+                    >
+                      <ProductImage src={item.image_url} alt={item.name} className="h-32 w-full rounded-2xl object-cover" />
+                      <p className="mt-2 line-clamp-1 px-1 text-sm font-bold text-cocoa-900">{item.name}</p>
+                      <div className="mt-1 flex items-center justify-between px-1 pb-1">
+                        <span className="text-sm font-bold text-blush-600">{formatCurrency(item.price)}</span>
+                        <span className="rounded-full bg-blush-500 p-1 text-white"><Plus className="h-4 w-4" /></span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 5. THỰC ĐƠN THEO NHÓM */}
+            {sections.map((cat) => (
+              <section key={cat.id} id={`cat-${cat.id}`} className="mt-7 scroll-mt-32 px-5">
+                <div className="mb-3 flex items-baseline gap-2">
+                  <h2 className="text-lg font-extrabold text-cocoa-900">{cat.emoji} {cat.name}</h2>
+                  <span className="text-xs font-semibold text-cocoa-300">{cat.items.length} món</span>
+                </div>
+                <div className="space-y-3">
+                  {cat.items.map((item) => (
+                    <MenuRow key={item.id} item={item} onOpen={openProduct} />
+                  ))}
+                </div>
+              </section>
+            ))}
+
+            {!errorMessage && products.length === 0 && (
+              <p className="py-16 text-center font-semibold text-cocoa-400">Quán chưa có món nào đang bán.</p>
+            )}
+          </>
         )}
       </div>
 
-      {/* 4. LUXURY FLOATING CART */}
+      {/* 6. THANH GIỎ HÀNG */}
       {cartCount > 0 && (
-        <div className="fixed bottom-8 left-6 right-6 z-40 animate-in slide-in-from-bottom-10 duration-700">
-          <div className="bg-slate-900/95 backdrop-blur-2xl rounded-[32px] p-4 flex justify-between items-center shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10">
-            <div className="flex items-center gap-4 pl-2">
-              <div className="relative">
-                <div className="bg-orange-500 p-3 rounded-2xl animate-pulse">
-                  <ShoppingCart className="w-5 h-5 text-white" />
-                </div>
-                <span className="absolute -top-2 -right-2 bg-white text-slate-900 text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">
+        <div className="fixed bottom-0 left-0 right-0 z-40 px-5 pb-safe">
+          <button
+            onClick={() => navigate('/checkout')}
+            className="mx-auto flex w-full max-w-md items-center justify-between rounded-full bg-blush-500 py-2 pl-2 pr-5 text-white shadow-soft animate-slide-up active:scale-[0.99]"
+          >
+            <span className="flex items-center gap-3">
+              <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/20">
+                <ShoppingBag className="h-5 w-5" />
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-blush-600">
                   {cartCount}
                 </span>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Tổng cộng</p>
-                <p className="font-black text-2xl text-white tracking-tighter">{formatCurrency(cartTotal)}đ</p>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/checkout')}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-black py-4 px-10 rounded-[24px] transition-all active:scale-95 shadow-xl shadow-orange-500/20 uppercase text-xs tracking-widest"
-            >
-              Thanh toán
-            </button>
-          </div>
+              </span>
+              <span className="text-left">
+                <span className="block text-[11px] font-medium text-white/80">{cartCount} món trong giỏ</span>
+                <span className="block text-base font-extrabold">{formatCurrency(cartTotal)}</span>
+              </span>
+            </span>
+            <span className="flex items-center gap-1 text-sm font-bold">
+              Xem giỏ hàng <ChevronRight className="h-4 w-4" />
+            </span>
+          </button>
         </div>
       )}
 
-      {/* 5. PRODUCT DRAWER */}
+      {/* 7. CHỌN TÙY CHỌN MÓN */}
       {selectedProduct && (
-        <ProductDrawer 
-          product={selectedProduct} 
-          isOpen={isDrawerOpen} 
-          onClose={() => setIsDrawerOpen(false)}
+        <ProductDrawer
+          key={selectedProduct.id}
+          product={selectedProduct}
+          isOpen
+          onClose={() => setSelectedProduct(null)}
           onAddToCart={handleAddToCart}
         />
       )}
-
-      {/* CUSTOM STYLE FOR HIDING SCROLLBAR */}
-      <style jsx>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
     </div>
   );
 };
+
+// Một dòng món trong thực đơn
+const MenuRow = ({ item, onOpen }) => (
+  <button
+    onClick={() => onOpen(item)}
+    className="flex w-full gap-3 rounded-3xl bg-white p-2.5 text-left shadow-card transition active:scale-[0.99]"
+  >
+    <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-blush-100">
+      <ProductImage src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+      {isBestseller(item) && (
+        <span className="absolute left-1.5 top-1.5 rounded-full bg-white/90 px-1.5 py-0.5 text-[9px] font-bold text-blush-700">
+          Bán chạy
+        </span>
+      )}
+    </div>
+    <div className="flex min-w-0 flex-1 flex-col py-1 pr-1">
+      <h3 className="line-clamp-1 font-bold text-cocoa-900">{item.name}</h3>
+      {item.description && (
+        <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-cocoa-400">{item.description}</p>
+      )}
+      <div className="mt-auto flex items-center justify-between pt-1">
+        <span className="font-bold text-blush-600">{formatCurrency(item.price)}</span>
+        <span className="rounded-full bg-blush-500 p-1.5 text-white shadow-soft">
+          <Plus className="h-4 w-4" />
+        </span>
+      </div>
+    </div>
+  </button>
+);
 
 export default MenuPage;

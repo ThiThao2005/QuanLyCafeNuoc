@@ -1,64 +1,136 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom'; // Dùng để chuyển trang
-import { Coffee, ChevronRight } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronRight, QrCode, Coffee, Sparkles, Clock, Heart } from 'lucide-react';
+import { useTableNumber } from '../services/tableSession';
+import QrScanner from '../components/QrScanner';
+
+const HIGHLIGHTS = [
+  { icon: Coffee, label: 'Pha mới\nmỗi ly' },
+  { icon: Clock, label: 'Gọi món\ntại bàn' },
+  { icon: Heart, label: 'Không gian\nxinh xắn' },
+];
 
 const LandingPage = () => {
-  // Giả sử sau này bạn lấy số bàn từ URL (VD: ?table=05)
-  const tableNumber = "05"; 
+  // Số bàn lấy từ link QR: /?table=05
+  const tableNumber = useTableNumber();
   const navigate = useNavigate();
+  const [isScanning, setIsScanning] = useState(false);
+
+  // Quét được mã bàn → đưa số bàn lên URL để lưu lại như khi quét bằng camera điện thoại
+  const handleScanned = useCallback((scannedTable) => {
+    setIsScanning(false);
+    navigate(`/?table=${scannedTable}`, { replace: true });
+  }, [navigate]);
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between overflow-hidden">
-      
-      {/* 1. Hình nền Best-seller (Làm mờ) */}
-      <div className="absolute inset-0 z-0">
-        <img 
-          src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=1000" 
-          alt="Best Seller"
-          className="w-full h-full object-cover scale-110 blur-[3px] brightness-[0.4]"
-        />
-      </div>
+    <div className="min-h-screen bg-blush-50">
+      <div className="relative mx-auto flex min-h-screen max-w-md flex-col">
+        {/* 1. Ảnh bìa */}
+        <div className="relative h-[46vh] min-h-[300px] overflow-hidden rounded-b-[40px]">
+          <img
+            src="https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=900&q=80"
+            alt="Ly cà phê sữa của quán"
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-blush-800/30 via-blush-700/10 to-blush-50" />
 
-      {/* 2. Nội dung chính */}
-      <div className="relative z-10 flex flex-col items-center text-center px-6 pt-20">
-        {/* Logo Quán */}
-        <div className="w-24 h-24 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mb-6 border border-white/30 shadow-2xl">
-          <Coffee className="text-white w-12 h-12" />
-        </div>
+          <div className="absolute left-0 right-0 top-0 flex items-center justify-between p-5">
+            <div className="flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 backdrop-blur">
+              <span className="text-lg">🌸</span>
+              <span className="text-xs font-bold text-blush-700">Chào mừng bạn</span>
+            </div>
+          </div>
 
-        <p className="text-orange-400 font-bold uppercase tracking-[0.2em] text-xs mb-2">
-          HUTECH IT K23 Project
-        </p>
-        
-        <h1 className="text-4xl font-black text-white mb-4 tracking-tight">
-          HUTECH <br />
-          <span className="text-orange-500 text-5xl font-extrabold uppercase italic">Coffee</span>
-        </h1>
-
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl p-6 mt-8 w-full max-w-[300px]">
-          <p className="text-gray-300 text-sm mb-1">Chào mừng bạn đã đến!</p>
-          <p className="text-white text-lg font-medium">Bạn đang ngồi tại</p>
-          <div className="text-5xl font-black text-orange-500 mt-2 tracking-tighter">
-            BÀN {tableNumber}
+          <div className="absolute bottom-6 left-0 right-0 px-6 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blush-700">Coffee & Tea</p>
+            <h1 className="mt-1 text-4xl font-extrabold tracking-tight text-cocoa-900">
+              Hoa Mai <span className="text-blush-600">Coffee</span>
+            </h1>
+            <p className="mt-1 text-sm font-medium text-cocoa-500">Ngọt ngào trong từng ngụm nhỏ</p>
           </div>
         </div>
+
+        {/* 2. Thẻ số bàn */}
+        <div className="px-6">
+          <div className="-mt-1 rounded-[28px] bg-white p-6 text-center shadow-soft">
+            {tableNumber ? (
+              <>
+                <p className="text-sm font-medium text-cocoa-400">Bạn đang ngồi tại</p>
+                <p className="mt-1 text-5xl font-extrabold tracking-tight text-blush-600">Bàn {tableNumber}</p>
+                <p className="mt-2 text-xs text-cocoa-400">Chọn món, quán sẽ mang tận bàn cho bạn</p>
+              </>
+            ) : (
+              <>
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blush-100">
+                  <QrCode className="h-7 w-7 text-blush-600" />
+                </div>
+                <p className="font-bold text-cocoa-900">Quét mã QR trên bàn</p>
+                <p className="mt-1 text-sm text-cocoa-400">để quán biết bạn đang ngồi bàn nào nhé</p>
+              </>
+            )}
+          </div>
+
+          {/* 3. Điểm nổi bật */}
+          <div className="mt-6 grid grid-cols-3 gap-3">
+            {HIGHLIGHTS.map(({ icon: Icon, label }) => (
+              <div key={label} className="flex flex-col items-center gap-2 rounded-2xl bg-white/70 py-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blush-100">
+                  <Icon className="h-5 w-5 text-blush-600" />
+                </div>
+                <span className="whitespace-pre-line text-center text-[11px] font-semibold leading-tight text-cocoa-500">
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 4. Nút hành động */}
+        <div className="mt-auto px-6 pb-safe pt-8">
+          {tableNumber ? (
+            <>
+              <button
+                onClick={() => navigate('/menu')}
+                className="group flex w-full items-center justify-center gap-2 rounded-full bg-blush-500 py-4 text-base font-bold text-white shadow-soft transition active:scale-[0.98] hover:bg-blush-600"
+              >
+                <Sparkles className="h-5 w-5" />
+                Bắt đầu gọi món
+                <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              </button>
+              <button
+                onClick={() => setIsScanning(true)}
+                className="mx-auto mt-3 flex items-center gap-1.5 py-2 text-sm font-semibold text-cocoa-500 hover:text-blush-600"
+              >
+                <QrCode className="h-4 w-4" />
+                Không đúng bàn? Quét lại mã QR
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setIsScanning(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-blush-500 py-4 text-base font-bold text-white shadow-soft transition active:scale-[0.98] hover:bg-blush-600"
+              >
+                <QrCode className="h-5 w-5" />
+                Quét mã QR
+              </button>
+              <button
+                onClick={() => navigate('/menu')}
+                className="mt-3 w-full rounded-full border-2 border-blush-200 bg-white py-3.5 text-sm font-bold text-blush-700 transition hover:bg-blush-100"
+              >
+                Xem menu trước
+              </button>
+            </>
+          )}
+          <p className="mt-6 text-center text-[10px] font-medium uppercase tracking-widest text-cocoa-300">
+            Phát triển bởi Nguyễn Thị Thảo
+          </p>
+        </div>
       </div>
 
-      {/* 3. Nút bấm Bắt đầu */}
-      <div className="relative z-10 w-full px-6 pb-16 flex flex-col items-center">
-        <button 
-          onClick={() => navigate('/menu')} // Chuyển hướng sang trang Menu
-          className="group w-full max-w-[320px] bg-orange-500 hover:bg-orange-600 text-white font-bold py-5 rounded-2xl flex items-center justify-center gap-3 shadow-xl shadow-orange-900/40 transition-all active:scale-95"
-        >
-          <span className="text-lg uppercase tracking-wide">Bắt đầu gọi món</span>
-          <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-        </button>
-        
-        <p className="text-white/40 text-[10px] mt-6 uppercase tracking-widest">
-          Phát triển bởi Nguyễn Thị Thảo
-        </p>
-      </div>
-
+      {isScanning && (
+        <QrScanner onResult={handleScanned} onClose={() => setIsScanning(false)} />
+      )}
     </div>
   );
 };

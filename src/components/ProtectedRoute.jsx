@@ -1,37 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-import { isAdminUser } from '../services/adminAuth';
+import { fetchStaffRole } from '../services/staffAuth';
 
-const ProtectedRoute = ({ children }) => {
-  const [session, setSession] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+/**
+ * Chỉ cho vào trang khi đã đăng nhập VÀ có quyền nằm trong `allow`.
+ * Ví dụ: <ProtectedRoute allow={['admin']}>, <ProtectedRoute allow={['admin', 'staff']}>
+ */
+const ProtectedRoute = ({ allow, children }) => {
+  const [state, setState] = useState({ loading: true, session: null, role: null });
 
   useEffect(() => {
-    // Kiểm tra xem user đã đăng nhập chưa
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setIsAdmin(isAdminUser(session?.user));
-      setLoading(false);
-    });
+    let active = true;
 
-    // Lắng nghe thay đổi trạng thái đăng nhập
+    const load = async (session) => {
+      const role = session?.user ? await fetchStaffRole(session.user) : null;
+      if (active) setState({ loading: false, session, role });
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => load(session));
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setIsAdmin(isAdminUser(session?.user));
+      load(session);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  if (loading) return <div className="p-10 text-center">Đang kiểm tra quyền truy cập...</div>;
+  if (state.loading) return <div className="p-10 text-center">Đang kiểm tra quyền truy cập...</div>;
 
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
-
-if (!isAdmin) {
+  if (!state.session || !allow.includes(state.role)) {
     return <Navigate to="/login" replace />;
   }
 

@@ -1,0 +1,15 @@
+# Thư viện cài bằng npm (cài lại bằng: npm install)
+node_modules/
+
+# File build (Vercel tự build lại)
+dist/
+
+# Biến môi trường, không đưa lên git
+.env
+.env.*
+!.env.example
+
+# Log & file hệ thống
+*.log
+.DS_Store
+Thumbs.db

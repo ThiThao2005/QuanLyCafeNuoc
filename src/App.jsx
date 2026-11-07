@@ -24,18 +24,25 @@ function App() {
           <Route path="/menu" element={<MenuPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
 
-          {/* Nhóm trang dành cho nhân viên pha chế */}
-          <Route path="/barista" element={<BaristaPage />} />
+          {/* Trang nhân viên pha chế: nhân viên hoặc admin đã đăng nhập */}
+          <Route
+            path="/barista"
+            element={
+              <ProtectedRoute allow={['admin', 'staff']}>
+                <BaristaPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Nhóm trang quản trị (Admin) có bảo mật */}
           <Route path="/login" element={<LoginPage />} />
-          <Route 
-            path="/admin" 
+          <Route
+            path="/admin"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allow={['admin']}>
                 <AdminPage />
               </ProtectedRoute>
-            } 
+            }
           />
         </Routes>
       </Router>

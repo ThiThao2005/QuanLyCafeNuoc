@@ -1,138 +1,199 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { supabase } from '../services/supabaseClient';
-import { Layout, Snowflake, Sun, QrCode, CheckCircle2, MoreVertical } from 'lucide-react';
+import { Snowflake, Sun, Printer, Download, X, QrCode } from 'lucide-react';
+import { ACTIVE_STATUSES, ORDER_STATUS } from '../orderStatus';
+import { formatCurrency } from '../menuConfig';
+import { Card, PageHeader, RefreshButton } from './adminUi';
+
+// Link mã QR của từng bàn: khách quét bằng camera điện thoại là mở thẳng web đúng bàn.
+const tableUrl = (tableNumber) => `${window.location.origin}/?table=${tableNumber}`;
+
+const makeQr = (tableNumber) =>
+  QRCode.toDataURL(tableUrl(tableNumber), {
+    width: 480,
+    margin: 1,
+    color: { dark: '#4E3632', light: '#FFFFFF' },
+  });
+
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Mở cửa sổ in với các thẻ QR (mỗi thẻ 1 bàn)
+const printQrCards = async (tables) => {
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('Trình duyệt đã chặn cửa sổ in. Hãy cho phép cửa sổ bật lên (pop-up) rồi thử lại.');
+    return;
+  }
+  win.document.write('<p style="font-family:sans-serif">Đang tạo mã QR...</p>');
+  const cards = await Promise.all(tables.map(async (t) => ({ number: t.table_number, qr: await makeQr(t.table_number) })));
+  win.document.open();
+  win.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Mã QR bàn</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  body { font-family: "Be Vietnam Pro", Arial, sans-serif; margin: 0; color: #4E3632; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10mm; }
+  .card { border: 2px solid #FDBACB; border-radius: 18px; padding: 8mm 6mm; text-align: center; break-inside: avoid; background: #FFF7F9; }
+  .brand { font-size: 13px; font-weight: 700; letter-spacing: 2px; color: #D9547B; }
+  .table { font-size: 34px; font-weight: 800; margin: 2mm 0 4mm; }
+  img { width: 55mm; height: 55mm; background: #fff; padding: 3mm; border-radius: 10px; }
+  .hint { font-size: 12px; margin-top: 3mm; }
+</style></head><body><div class="grid">
+${cards.map((c) => `<div class="card"><div class="brand">HOA MAI COFFEE</div><div class="table">BÀN ${escapeHtml(c.number)}</div>
+<img src="${c.qr}" alt=""><div class="hint">Quét mã để xem menu & gọi món tại bàn</div></div>`).join('')}
+</div><script>window.onload = () => setTimeout(() => window.print(), 300);</script></body></html>`);
+  win.document.close();
+};
 
 const AdminTables = () => {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+
+  const fetchTablesWithStatus = useCallback(async () => {
+    setLoading(true);
+    const [{ data: tableData }, { data: activeOrders }] = await Promise.all([
+      supabase.from('tables').select('*').order('table_number'),
+      supabase.from('orders').select('table_id, status, total_price').in('status', ACTIVE_STATUSES),
+    ]);
+
+    setTables((tableData || []).map((table) => {
+      const orders = (activeOrders || []).filter((o) => o.table_id === table.id);
+      const status = orders.some((o) => o.status === ORDER_STATUS.PENDING)
+        ? ORDER_STATUS.PENDING
+        : orders.length ? ORDER_STATUS.MAKING : null;
+      return {
+        ...table,
+        current_status: status,
+        open_orders: orders.length,
+        open_total: orders.reduce((s, o) => s + Number(o.total_price || 0), 0),
+      };
+    }));
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     fetchTablesWithStatus();
-    
-    // Đăng ký Realtime để cập nhật trạng thái bàn ngay lập tức khi có đơn mới
     const channel = supabase
       .channel('table_status_updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        fetchTablesWithStatus();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchTablesWithStatus())
       .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchTablesWithStatus]);
 
-    return () => supabase.removeChannel(channel);
-  }, []);
-
-  const fetchTablesWithStatus = async () => {
-    setLoading(true);
-    // 1. Lấy 15 bàn
-    const { data: tableData } = await supabase.from('tables').select('*').order('table_number');
-    
-    // 2. Lấy đơn hàng chưa hoàn thành
-    const { data: activeOrders } = await supabase
-      .from('orders')
-      .select('table_id, status')
-      .neq('status', 'Đã hoàn thành');
-
-    // 3. Map trạng thái vào bàn
-    const updatedTables = tableData?.map(table => {
-      const order = activeOrders?.find(o => o.table_id === table.id);
-      return {
-        ...table,
-        current_status: order ? order.status : 'Trống'
-      };
-    });
-
-    setTables(updatedTables || []);
-    setLoading(false);
-  };
-
-  const indoorTables = tables.filter(t => parseInt(t.table_number) <= 10);
-  const outdoorTables = tables.filter(t => parseInt(t.table_number) > 10);
-
-  if (loading) return <div className="p-10 text-center text-gray-400 font-bold animate-pulse">Đang tải sơ đồ bàn...</div>;
+  const indoorTables = tables.filter((t) => parseInt(t.table_number, 10) <= 10);
+  const outdoorTables = tables.filter((t) => parseInt(t.table_number, 10) > 10);
+  const busyCount = tables.filter((t) => t.current_status).length;
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-700">
-      {/* Header & Chú thích */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-gray-800">Sơ đồ vận hành</h2>
-          <p className="text-sm text-gray-500">Quản lý 15 bàn theo khu vực thời gian thực</p>
-        </div>
-        <div className="flex bg-white p-2 rounded-2xl shadow-sm gap-4">
-           <StatusBadge color="bg-gray-200" label="Trống" />
-           <StatusBadge color="bg-orange-500" label="Chờ món" />
-           <StatusBadge color="bg-green-500" label="Có khách" />
-        </div>
-      </div>
-
-      {/* KHU VỰC TRONG NHÀ */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-3 text-blue-600">
-          <Snowflake className="w-5 h-5" />
-          <h3 className="font-black uppercase tracking-widest text-sm">Khu máy lạnh (Indoor)</h3>
-          <div className="flex-1 h-px bg-blue-100"></div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6">
-          {indoorTables.map(table => <TableCard key={table.id} table={table} />)}
-        </div>
-      </section>
-
-      {/* KHU VỰC SÂN VƯỜN */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-3 text-orange-600">
-          <Sun className="w-5 h-5" />
-          <h3 className="font-black uppercase tracking-widest text-sm">Khu sân vườn (Outdoor)</h3>
-          <div className="flex-1 h-px bg-orange-100"></div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6">
-          {outdoorTables.map(table => <TableCard key={table.id} table={table} />)}
-        </div>
-      </section>
-    </div>
-  );
-};
-
-// Component thẻ bàn con
-const TableCard = ({ table }) => {
-  const isBusy = table.current_status !== 'Trống';
-  const isPending = table.current_status === 'Chờ xử lý';
-
-  return (
-    <div className={`group relative p-6 rounded-[40px] border-2 transition-all duration-300 transform hover:-translate-y-2
-      ${!isBusy ? 'bg-white border-transparent shadow-sm' : 
-        isPending ? 'bg-orange-50 border-orange-500 shadow-orange-100' : 'bg-green-50 border-green-500 shadow-green-100'}`}
-    >
-      <div className="flex justify-between items-start mb-2">
-        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Bàn</span>
-        <MoreVertical className="w-4 h-4 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
-      
-      <p className="text-5xl font-black text-gray-800 mb-4 tabular-nums">{table.table_number}</p>
-      
-      <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight
-        ${!isBusy ? 'bg-gray-100 text-gray-400' : 
-          isPending ? 'bg-orange-500 text-white animate-pulse' : 'bg-green-500 text-white'}`}>
-        {isPending && <CheckCircle2 className="w-3 h-3" />}
-        {table.current_status}
-      </div>
-
-      {/* Lớp phủ khi Hover: Hiện mã QR */}
-      <div className="absolute inset-0 bg-white/95 rounded-[40px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center p-4">
-        <div className="bg-gray-100 p-2 rounded-2xl mb-2">
-          <img src={table.qr_code_url} alt="QR" className="w-20 h-20" />
-        </div>
-        <button className="flex items-center gap-1 text-[10px] font-black text-orange-600 uppercase">
-          <QrCode className="w-3 h-3" /> In mã bàn
+    <div>
+      <PageHeader title="Bàn & mã QR" subtitle={`${busyCount}/${tables.length} bàn đang có đơn · Bấm vào bàn để xem mã QR`}>
+        <RefreshButton onClick={fetchTablesWithStatus} loading={loading} />
+        <button
+          onClick={() => printQrCards(tables)}
+          disabled={!tables.length}
+          className="flex items-center gap-1.5 rounded-full bg-blush-500 px-4 py-2 text-sm font-bold text-white shadow-soft hover:bg-blush-600 disabled:opacity-50"
+        >
+          <Printer className="h-4 w-4" /> In tất cả mã QR
         </button>
+      </PageHeader>
+
+      <div className="mb-5 flex flex-wrap gap-3 text-xs font-semibold text-cocoa-500">
+        <Legend className="bg-white ring-1 ring-blush-200" label="Trống" />
+        <Legend className="bg-amber-300" label="Có đơn chờ pha" />
+        <Legend className="bg-sky-300" label="Đang pha" />
       </div>
+
+      <Zone icon={Snowflake} title="Trong nhà (máy lạnh)" tables={indoorTables} onSelect={setSelected} />
+      <Zone icon={Sun} title="Sân vườn" tables={outdoorTables} onSelect={setSelected} />
+
+      {selected && <QrModal table={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 };
 
-const StatusBadge = ({ color, label }) => (
-  <div className="flex items-center gap-2 px-2">
-    <span className={`w-2.5 h-2.5 ${color} rounded-full`}></span>
-    <span className="text-[10px] font-bold text-gray-500 uppercase">{label}</span>
-  </div>
+const Legend = ({ className, label }) => (
+  <span className="flex items-center gap-1.5">
+    <span className={`h-3 w-3 rounded-full ${className}`} /> {label}
+  </span>
 );
+
+const Zone = ({ icon: Icon, title, tables, onSelect }) => {
+  if (!tables.length) return null;
+  return (
+    <section className="mb-8">
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-cocoa-700">
+        <Icon className="h-4 w-4 text-blush-500" /> {title}
+      </h2>
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+        {tables.map((table) => <TableCard key={table.id} table={table} onClick={() => onSelect(table)} />)}
+      </div>
+    </section>
+  );
+};
+
+const TableCard = ({ table, onClick }) => {
+  const style = table.current_status === ORDER_STATUS.PENDING
+    ? 'bg-amber-50 ring-2 ring-amber-300'
+    : table.current_status === ORDER_STATUS.MAKING
+      ? 'bg-sky-50 ring-2 ring-sky-300'
+      : 'bg-white';
+
+  return (
+    <button onClick={onClick} className={`rounded-3xl p-4 text-left shadow-card transition hover:-translate-y-0.5 ${style}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase text-cocoa-400">Bàn</span>
+        <QrCode className="h-4 w-4 text-cocoa-300" />
+      </div>
+      <p className="text-3xl font-extrabold tabular-nums text-cocoa-900 md:text-4xl">{table.table_number}</p>
+      <p className="mt-1 truncate text-[11px] font-semibold text-cocoa-500">
+        {table.current_status
+          ? `${table.open_orders} đơn · ${formatCurrency(table.open_total)}`
+          : 'Trống'}
+      </p>
+    </button>
+  );
+};
+
+const QrModal = ({ table, onClose }) => {
+  const [qr, setQr] = useState('');
+
+  useEffect(() => {
+    makeQr(table.table_number).then(setQr);
+  }, [table.table_number]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-cocoa-900/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-xs rounded-[32px] bg-white p-6 text-center shadow-soft" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-end">
+          <button onClick={onClose} className="rounded-full bg-blush-50 p-2" aria-label="Đóng">
+            <X className="h-4 w-4 text-cocoa-700" />
+          </button>
+        </div>
+        <p className="text-xs font-bold tracking-widest text-blush-600">HOA MAI COFFEE</p>
+        <p className="text-4xl font-extrabold text-cocoa-900">Bàn {table.table_number}</p>
+        <div className="mx-auto mt-4 aspect-square w-56 rounded-2xl bg-blush-50 p-3">
+          {qr && <img src={qr} alt={`Mã QR bàn ${table.table_number}`} className="h-full w-full rounded-xl" />}
+        </div>
+        <p className="mt-3 break-all text-[11px] text-cocoa-400">{tableUrl(table.table_number)}</p>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <a
+            href={qr || undefined}
+            download={`qr-ban-${table.table_number}.png`}
+            className="flex items-center justify-center gap-1.5 rounded-full bg-blush-50 py-2.5 text-sm font-bold text-blush-700"
+          >
+            <Download className="h-4 w-4" /> Tải ảnh
+          </a>
+          <button
+            onClick={() => printQrCards([table])}
+            className="flex items-center justify-center gap-1.5 rounded-full bg-blush-500 py-2.5 text-sm font-bold text-white"
+          >
+            <Printer className="h-4 w-4" /> In mã
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default AdminTables;

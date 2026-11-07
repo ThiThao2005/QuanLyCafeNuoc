@@ -1,63 +1,26 @@
 import React, { useState } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminStats from '../components/AdminStats';
+import AdminOrders from '../components/AdminOrders';
 import AdminMenu from '../components/AdminMenu';
 import AdminTables from '../components/AdminTables';
 
 const AdminPage = () => {
-  // Quản lý Tab đang hiển thị: 'stats', 'menu', hoặc 'tables'
+  // Tab đang hiển thị: 'stats' | 'orders' | 'menu' | 'tables'
   const [activeTab, setActiveTab] = useState('stats');
 
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC] font-sans">
-      {/* 1. Thanh Menu bên trái (Sidebar) */}
-      {/* Truyền activeTab và hàm setActiveTab để Sidebar có thể điều khiển nội dung chính */}
+    <div className="min-h-screen bg-blush-50 md:flex">
       <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* 2. Vùng hiển thị nội dung chính (Main Content) */}
-      <main className="flex-1 h-screen overflow-y-auto custom-scrollbar">
-        <div className="max-w-7xl mx-auto p-8">
-          
-          {/* Render Component tương ứng dựa trên state activeTab */}
-          <div className="transition-all duration-500 ease-in-out">
-            {activeTab === 'stats' && (
-              <div className="animate-in fade-in slide-in-from-right-4">
-                <AdminStats />
-              </div>
-            )}
-            
-            {activeTab === 'menu' && (
-              <div className="animate-in fade-in slide-in-from-right-4">
-                <AdminMenu />
-              </div>
-            )}
-            
-            {activeTab === 'tables' && (
-              <div className="animate-in fade-in slide-in-from-right-4">
-                <AdminTables />
-              </div>
-            )}
-          </div>
-
+      <main className="min-w-0 flex-1">
+        <div className="mx-auto max-w-6xl p-4 pb-28 md:p-8">
+          {activeTab === 'stats' && <AdminStats />}
+          {activeTab === 'orders' && <AdminOrders />}
+          {activeTab === 'menu' && <AdminMenu />}
+          {activeTab === 'tables' && <AdminTables />}
         </div>
       </main>
-
-      {/* CSS bổ sung để thanh cuộn nhìn đẹp hơn (Tùy chọn) */}
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #E2E8F0;
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #CBD5E1;
-        }
-      `}</style>
     </div>
   );
 };

@@ -16,9 +16,16 @@ const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); retur
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const dayKey = (d) => new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 
+// null = kỳ trước không có dữ liệu để so sánh
 const percentChange = (current, previous) => {
-  if (!previous) return current ? null : 0;
+  if (!previous) return null;
   return Math.round(((current - previous) / previous) * 100);
+};
+
+const formatAxis = (v) => {
+  if (v >= 1000000) return `${+(v / 1000000).toFixed(1)}tr`;
+  if (v >= 1000) return `${Math.round(v / 1000)}k`;
+  return `${v}`;
 };
 
 const AdminStats = () => {
@@ -158,7 +165,8 @@ const AdminStats = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#FFDCE5" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#A48A85', fontSize: 11 }} interval="preserveStartEnd" />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#A48A85', fontSize: 11 }}
-                  tickFormatter={(v) => (v >= 1000000 ? `${v / 1000000}tr` : `${v / 1000}k`)} />
+                  allowDecimals={false} domain={[0, (max) => Math.max(max, 100000)]}
+                  tickFormatter={formatAxis} />
                 <Tooltip
                   contentStyle={{ borderRadius: 16, border: 'none', boxShadow: '0 8px 24px -8px rgba(236,112,148,.35)' }}
                   formatter={(v) => [formatCurrency(v), 'Doanh thu']}
@@ -222,7 +230,7 @@ const StatCard = ({ icon: Icon, tint, label, value, change, sub }) => (
     <p className="mt-0.5 truncate text-xl font-extrabold text-cocoa-900 md:text-2xl">{value}</p>
     {change !== undefined ? (
       change === null ? (
-        <p className="mt-1 text-[11px] font-semibold text-cocoa-300">Kỳ trước chưa có dữ liệu</p>
+        <p className="mt-1 text-[11px] font-semibold text-cocoa-300">Chưa có dữ liệu kỳ trước để so sánh</p>
       ) : (
         <p className={`mt-1 flex items-center gap-1 text-[11px] font-bold ${change >= 0 ? 'text-emerald-600' : 'text-blush-700'}`}>
           {change >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}

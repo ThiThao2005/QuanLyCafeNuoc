@@ -4,9 +4,10 @@ import AdminStats from '../components/AdminStats';
 import AdminOrders from '../components/AdminOrders';
 import AdminMenu from '../components/AdminMenu';
 import AdminTables from '../components/AdminTables';
+import BaristaPage from './BaristaPage';
 
 const AdminPage = () => {
-  // Tab đang hiển thị: 'stats' | 'orders' | 'menu' | 'tables'
+  // Tab đang hiển thị: 'stats' | 'barista' | 'orders' | 'menu' | 'tables'
   const [activeTab, setActiveTab] = useState('stats');
 
   return (
@@ -16,6 +17,7 @@ const AdminPage = () => {
       <main className="min-w-0 flex-1">
         <div className="mx-auto max-w-6xl p-4 pb-28 md:p-8">
           {activeTab === 'stats' && <AdminStats />}
+          {activeTab === 'barista' && <BaristaPage embedded />}
           {activeTab === 'orders' && <AdminOrders />}
           {activeTab === 'menu' && <AdminMenu />}
           {activeTab === 'tables' && <AdminTables />}

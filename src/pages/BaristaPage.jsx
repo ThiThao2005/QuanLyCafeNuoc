@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-import { Clock, LogOut, MessageSquare, Bell, BellOff, Play, CheckCheck, X, Coffee, LayoutDashboard } from 'lucide-react';
+import { Clock, LogOut, MessageSquare, Bell, BellOff, Play, CheckCheck, X, Coffee, LayoutDashboard, Maximize2 } from 'lucide-react';
 import { ACTIVE_STATUSES, ORDER_STATUS, PAYMENT_LABEL, formatItemOptions } from '../orderStatus';
 import { formatCurrency } from '../menuConfig';
 import { fetchStaffRole } from '../services/staffAuth';
@@ -11,7 +11,8 @@ const LATE_AFTER_MINUTES = 10;
 
 const minutesSince = (iso, now) => Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
 
-const BaristaPage = () => {
+// embedded = true: hiển thị bên trong trang admin (tab "Pha chế"), không có header riêng
+const BaristaPage = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [tableNames, setTableNames] = useState({});
@@ -93,6 +94,75 @@ const BaristaPage = () => {
   const pending = orders.filter((o) => o.status === ORDER_STATUS.PENDING);
   const making = orders.filter((o) => o.status === ORDER_STATUS.MAKING);
 
+  const soundButton = (
+    <button
+      onClick={toggleSound}
+      className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold transition ${
+        soundOn ? 'bg-blush-500 text-white shadow-soft' : 'bg-white text-blush-700 ring-1 ring-blush-200'
+      }`}
+    >
+      {soundOn ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+      {soundOn ? 'Âm báo: bật' : 'Bật âm báo'}
+    </button>
+  );
+
+  const board = loading ? (
+    <p className="p-10 text-center font-semibold text-cocoa-400">Đang kết nối quầy pha chế...</p>
+  ) : (
+    <div className="grid gap-6 md:grid-cols-2">
+      <Column title="Chờ pha" count={pending.length} dot="bg-amber-400" empty="Chưa có đơn mới ☕">
+        {pending.map((order) => (
+          <OrderCard
+            key={order.id}
+            order={order}
+            table={tableNames[order.table_id]}
+            minutes={minutesSince(order.created_at, now)}
+            primary={{ label: 'Bắt đầu pha', icon: Play, onClick: () => updateStatus(order, ORDER_STATUS.MAKING), className: 'bg-sky-500 hover:bg-sky-600' }}
+            onCancel={() => updateStatus(order, ORDER_STATUS.CANCELLED)}
+          />
+        ))}
+      </Column>
+
+      <Column title="Đang pha" count={making.length} dot="bg-sky-400" empty="Không có đơn đang pha">
+        {making.map((order) => (
+          <OrderCard
+            key={order.id}
+            order={order}
+            table={tableNames[order.table_id]}
+            minutes={minutesSince(order.created_at, now)}
+            primary={{ label: 'Xong, mang ra bàn', icon: CheckCheck, onClick: () => updateStatus(order, ORDER_STATUS.DONE), className: 'bg-emerald-500 hover:bg-emerald-600' }}
+          />
+        ))}
+      </Column>
+    </div>
+  );
+
+  // Trong trang admin: tiêu đề + nút âm báo + nút mở toàn màn hình
+  if (embedded) {
+    return (
+      <div>
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-cocoa-900 md:text-3xl">Pha chế</h1>
+            <p className="mt-1 text-sm text-cocoa-400">
+              {pending.length} đơn chờ pha · {making.length} đơn đang pha · tự cập nhật
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {soundButton}
+            <button
+              onClick={() => navigate('/barista')}
+              className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-xs font-bold text-cocoa-600 shadow-card hover:text-blush-700"
+            >
+              <Maximize2 className="h-4 w-4" /> Toàn màn hình
+            </button>
+          </div>
+        </div>
+        {board}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blush-100 to-blush-50">
       {/* Header */}
@@ -110,15 +180,7 @@ const BaristaPage = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={toggleSound}
-              className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold transition ${
-                soundOn ? 'bg-blush-500 text-white shadow-soft' : 'bg-blush-50 text-blush-700 ring-1 ring-blush-200'
-              }`}
-            >
-              {soundOn ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
-              {soundOn ? 'Âm báo: bật' : 'Bật âm báo'}
-            </button>
+            {soundButton}
             {isAdmin && (
               <button
                 onClick={() => navigate('/admin')}
@@ -139,36 +201,7 @@ const BaristaPage = () => {
         </div>
       </header>
 
-      {loading ? (
-        <p className="p-10 text-center font-semibold text-cocoa-400">Đang kết nối quầy pha chế...</p>
-      ) : (
-        <main className="mx-auto grid max-w-7xl gap-6 p-4 md:grid-cols-2 md:p-6">
-          <Column title="Chờ pha" count={pending.length} dot="bg-amber-400" empty="Chưa có đơn mới ☕">
-            {pending.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                table={tableNames[order.table_id]}
-                minutes={minutesSince(order.created_at, now)}
-                primary={{ label: 'Bắt đầu pha', icon: Play, onClick: () => updateStatus(order, ORDER_STATUS.MAKING), className: 'bg-sky-500 hover:bg-sky-600' }}
-                onCancel={() => updateStatus(order, ORDER_STATUS.CANCELLED)}
-              />
-            ))}
-          </Column>
-
-          <Column title="Đang pha" count={making.length} dot="bg-sky-400" empty="Không có đơn đang pha">
-            {making.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                table={tableNames[order.table_id]}
-                minutes={minutesSince(order.created_at, now)}
-                primary={{ label: 'Xong, mang ra bàn', icon: CheckCheck, onClick: () => updateStatus(order, ORDER_STATUS.DONE), className: 'bg-emerald-500 hover:bg-emerald-600' }}
-              />
-            ))}
-          </Column>
-        </main>
-      )}
+      <main className="mx-auto max-w-7xl p-4 md:p-6">{board}</main>
     </div>
   );
 };

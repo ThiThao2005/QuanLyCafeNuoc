@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-import { BarChart3, ReceiptText, Coffee, LayoutGrid, LogOut, Store, ChefHat } from 'lucide-react';
+import { BarChart3, ReceiptText, Coffee, LayoutGrid, LogOut, Store, ChefHat, Maximize2 } from 'lucide-react';
 
 export const ADMIN_TABS = [
   { id: 'stats', label: 'Tổng quan', icon: BarChart3 },
+  { id: 'barista', label: 'Pha chế', icon: ChefHat },
   { id: 'orders', label: 'Đơn hàng', icon: ReceiptText },
   { id: 'menu', label: 'Thực đơn', icon: Coffee },
   { id: 'tables', label: 'Bàn & QR', icon: LayoutGrid },
@@ -59,13 +60,13 @@ const AdminSidebar = ({ activeTab, setActiveTab }) => {
             <p className="mb-2 px-4 text-[11px] font-bold uppercase tracking-wider text-cocoa-300">Mở nhanh</p>
             <button
               onClick={() => navigate('/barista')}
-              className="flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-semibold text-cocoa-500 hover:bg-blush-50 hover:text-blush-700"
+              className="flex w-full items-center gap-3 whitespace-nowrap rounded-2xl px-4 py-2.5 text-left text-sm font-semibold text-cocoa-500 hover:bg-blush-50 hover:text-blush-700"
             >
-              <ChefHat className="h-5 w-5" /> Màn hình pha chế
+              <Maximize2 className="h-5 w-5" /> Pha chế toàn màn hình
             </button>
             <button
               onClick={() => navigate('/menu')}
-              className="flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-semibold text-cocoa-500 hover:bg-blush-50 hover:text-blush-700"
+              className="flex w-full items-center gap-3 whitespace-nowrap rounded-2xl px-4 py-2.5 text-left text-sm font-semibold text-cocoa-500 hover:bg-blush-50 hover:text-blush-700"
             >
               <Store className="h-5 w-5" /> Xem trang khách
             </button>
@@ -100,8 +101,8 @@ const AdminSidebar = ({ activeTab, setActiveTab }) => {
           <p className="font-extrabold text-cocoa-900">Quản lý</p>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => navigate('/barista')} className="rounded-full p-2 text-cocoa-500" aria-label="Màn hình pha chế">
-            <ChefHat className="h-5 w-5" />
+          <button onClick={() => navigate('/menu')} className="rounded-full p-2 text-cocoa-500" aria-label="Xem trang khách">
+            <Store className="h-5 w-5" />
           </button>
           <button onClick={handleSignOut} className="rounded-full p-2 text-cocoa-500" aria-label="Đăng xuất">
             <LogOut className="h-5 w-5" />
@@ -109,7 +110,7 @@ const AdminSidebar = ({ activeTab, setActiveTab }) => {
         </div>
       </header>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-4 border-t border-blush-100 bg-white pb-safe pt-1 md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 grid grid-cols-5 border-t border-blush-100 bg-white pb-safe pt-1 md:hidden">
         {ADMIN_TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
